@@ -8,6 +8,29 @@ setwd("~/classes/Censored data/Nondetects and Data Analysis/NADA Online
 ## Load all packages for class
 source("~/classes/Censored data/Nondetects and Data Analysis/NADA Online 
        3_6/Class Data/Loadlibs.R", encoding = 'UTF-8')
+# Load libraries for the NADA online course 
+loadlibs<-function(x =0){
+  require(EnvStats)
+  require(fitdistrplus)
+  require(Kendall)
+  require(multcomp)
+  require(NADA)
+  require(perm)
+  require (survminer)
+  #   additional packages
+  require(car)
+  require(bestglm)
+  require(rms)
+  require(vegan) 
+  require (cenGAM)
+  require (mgcv)
+  require(nlme)
+  require(coin)
+  require(NADA2)
+}
+loadlibs()
+cat(" R libraries loaded for Nondetects And Data Analysis online course","\n", " written by Dennis R. Helsel, Practical Stats. Home page practicalstats.com",'\n')
+
 
 ## From Freya - a script to load or install all needed packages at once
 ipak <- function(pkg){
@@ -103,6 +126,17 @@ cboxplot(Zinc$Zn,Zinc$ZnLT,Zinc$Zone)
 cboxplot(Zinc$Zn,Zinc$ZnLT,Zinc$Zone, LOG=TRUE)
 
 cboxplot(Zinc$Zn,Zinc$ZnLT,Zinc$Zone, LOG=TRUE, show=TRUE)
+
+##from Johanna Kraus
+#mbp1<- cenboxplot(bee.pest$Concentration, bee.pest$Cens, bee.pest$Treat, log = "TRUE", show = "TRUE")
+#mbp1
+#imputed.bp<-as.data.frame(mbp1)
+#ggplot(imputed.bp,
+#       aes(x=group, y=ros.model)) +
+#  geom_boxplot(show.legend = FALSE)+
+#  geom_point(show.legend = FALSE)+
+#  geom_abline(slope = 0, intercept = 0)+
+#  scale_y_continuous(trans='log10')
 
 ## open rda file TCEReg
 cenxyplot(TCEReg$PopDensity, 1-TCEReg$PopAbv1, TCEReg$TCEConc, TCEReg$TCECen)
@@ -598,4 +632,560 @@ Pollen_Thia$Below05 [Pollen_Thia$ThiaCens == 1] <- -1
 Pollen_Thia$Below05 [Pollen_Thia$Thiamethoxam < 0.05] <- -1
 kruskal.test(Pollen_Thia$Below05~Pollen_Thia$SamplingEvent)
 
+
+# 10 Correlation and Regression -------------------------------------------
+
+##Code, Source file, Loadlibs
+load("Golden.rda")
+
+cenxyplot(Golden$Kidney, Golden$KidneyCen, Golden$Blood, Golden$BloodCen, 
+          xlab = "Pb in kidney", ylab = "Pb in blood")
+
+Golden$lnBloodPb <-log(Golden$Blood)
+
+cenxyplot(Golden$Kidney, Golden$KidneyCen, Golden$lnBloodPb, Golden$BloodCen, 
+          xlab = "Pb in kidney", ylab = "ln(Pb in blood)")
+
+cencorreg(Golden$Blood, Golden$BloodCen, Golden$Kidney)
+
+summary(cencorreg(Golden$Blood, Golden$BloodCen, Golden$Kidney))
+
+cencorreg(Golden$Blood, Golden$BloodCen, Golden$Kidney, LOG = FALSE)
+## fails normality test when not log transformed, Q-Q plot not straight
+
+ATS(Golden$Blood, Golden$BloodCen, Golden$Kidney, Golden$KidneyCen)
+
+Pbreg <- cencorreg(Golden$Blood, Golden$BloodCen, Golden$Kidney)
+summary(Pbreg)
+
+cenxyplot(Golden$Kidney, Golden$KidneyCen, Golden$Blood, Golden$BloodCen, 
+          xlab = "Pb in kidney", ylab = "Pb in blood")
+ik <- order(Golden$Kidney)
+lines(Golden$Kidney[ik],
+      exp(predict(Pbreg)[ik]),
+      col = "red")
+
+cenxyplot(Golden$Kidney, Golden$KidneyCen, log(Golden$Blood), Golden$BloodCen, 
+          xlab = "Pb in kidney", ylab = "ln(Pb in blood)")
+lines(Golden$Kidney[ik],
+      predict(Pbreg)[ik],
+      col = "blue")
+
+Pbk <- ATS(Golden$Blood, Golden$BloodCen, Golden$Kidney, Golden$KidneyCen)
+
+ATS(Golden$Blood, Golden$BloodCen, Golden$Kidney, Golden$KidneyCen,
+           retrans = TRUE)
+
+ATS(Golden$Blood, Golden$BloodCen, Golden$Kidney, Golden$KidneyCen,
+    LOG = FALSE)
+
+##compare plots with and without log transformation, line looks like better
+ ##fit with the log transform
+
+
+# 10c multiple regression -------------------------------------------------
+
+##Code, Source file, Loadlibs
+load("TCEReg.rda")
+head(TCEReg)
+
+##first check for colinearity among explanatory variables
+vif(lm(TCEReg$TCEConc ~ TCEReg$LandUse + TCEReg$PopDensity + TCEReg$PctIndLU 
+       + TCEReg$Depth))
+
+##create data frame of x variables
+xvar4 <- data.frame(TCEReg$LandUse, TCEReg$PopDensity, TCEReg$PctIndLU, 
+                    TCEReg$Depth)
+##save the regression to an object
+reg4 <- cencorreg(TCEReg$TCEConc, TCEReg$TCECen, xvar4)
+summary(reg4)
+##step 1 check scale of y variable, Q-Q plot shows lognormal has good fit
+
+## step 2 decide whether to transform any x variables
+##look for decline in AIC of at least 4 and curved line
+partplots(TCEReg$TCEConc, TCEReg$TCECen, xvar4)
+
+#transform PopDensity and start over
+TCEReg$lnPopDen <- log(TCEReg$PopDensity)
+xvar4b <- data.frame(TCEReg$LandUse, TCEReg$lnPopDen, TCEReg$PctIndLU, 
+                     TCEReg$Depth)
+reg4b <- cencorreg(TCEReg$TCEConc, TCEReg$TCECen, xvar4b)
+summary(reg4b)
+partplots(TCEReg$TCEConc, TCEReg$TCECen, xvar4b)
+
+## step 3 decide which x variables to keep
+## drop one x variable at a time, start with highest p value
+xvar3 <- data.frame(TCEReg$LandUse, TCEReg$lnPopDen, TCEReg$Depth)
+reg3 <- cencorreg(TCEReg$TCEConc, TCEReg$TCECen, xvar3)
+summary(reg3)
+
+xvar2 <- data.frame(TCEReg$lnPopDen, TCEReg$Depth)
+reg2 <- cencorreg(TCEReg$TCEConc, TCEReg$TCECen, xvar2)
+summary(reg2)
+
+##usually keep x variables with p<0.10, also look at if slope is meaningful
+
+##try 1-variable model
+reg1 <- cencorreg(TCEReg$TCEConc, TCEReg$TCECen, TCEReg$lnPopDen)
+summary(reg1)
+##AIC goes back up, keep two variable model
+
+##or try all possible models at once with bestaic function
+##but look at partplots, p values, and slopes before just picking top one
+bestaic(TCEReg$TCEConc, TCEReg$TCECen, xvar4b)
+
+
+# 11a trend analysis with maximum likelihood ------------------------------
+##Code, Source file, Loadlibs
+load("DairyCreekChromium.Rdata")
+
+cencorreg(Dairy_Creek_Chromium$`Total Recoverable Chromium`, 
+          Dairy_Creek_Chromium$CrND, Dairy_Creek_Chromium$dectime)
+
+##Q-Q Plot for log data almost significant (non-normal) but 
+##untransformed data Q-Q plot is much worse
+cencorreg(Dairy_Creek_Chromium$`Total Recoverable Chromium`, 
+          Dairy_Creek_Chromium$CrND, Dairy_Creek_Chromium$dectime, LOG = FALSE)
+
+##add a second variable, flow rate
+xvar2 <- data.frame(Dairy_Creek_Chromium$dectime, 
+                    Dairy_Creek_Chromium$mean_daily_flow_cfs)
+reg.cr <- cencorreg(Dairy_Creek_Chromium$`Total Recoverable Chromium`, 
+                    Dairy_Creek_Chromium$CrND, xvar2)
+summary(reg.cr)
+##check for colinearity among x variables, don't need censoring indicator for this
+vif(lm(Dairy_Creek_Chromium$`Total Recoverable Chromium`~
+         Dairy_Creek_Chromium$dectime + Dairy_Creek_Chromium$mean_daily_flow_cfs))
+
+##check for influence of time of year by adding sin and cos terms
+##keep both terms if either is significant
+cosT <- cos(2*pi*Dairy_Creek_Chromium$dectime)
+sinT <- sin(2*pi*Dairy_Creek_Chromium$dectime)
+xvar4 <- data.frame(Dairy_Creek_Chromium$dectime,
+                    Dairy_Creek_Chromium$mean_daily_flow_cfs, cosT, sinT)
+reg4 <- cencorreg(Dairy_Creek_Chromium$`Total Recoverable Chromium`, 
+                    Dairy_Creek_Chromium$CrND, xvar4)
+summary(reg4)
+##neither sinT nor cosT are significant, and AIC went up, so 2 variable model
+##is better but still check for colinearity - if close to 10 drop one variable
+vif(lm(Dairy_Creek_Chromium$`Total Recoverable Chromium`~
+         Dairy_Creek_Chromium$dectime + Dairy_Creek_Chromium$mean_daily_flow_cfs 
+       + cosT + sinT))
+
+##2 variable model Q-Q plot fails normality test because of outlier
+##rest of data looks like good fit, different transformation unlikely to help
+##so check outlier
+reg.cr$resids
+##it's in row 7, check for errors, but it might be right, don't throw it out
+##unless you can find an error or unusual condition that you don't want 
+
+
+# 11b Nonparametric trend tests -------------------------------------------
+## Akritas-Theil-Sen line, multiple LODs ok, optimization of slope = 0 when
+## stuff making the trend is taken out
+##Code, Source file, Loadlibs
+load("DairyCreekChromium.Rdata")
+
+ATS(Dairy_Creek_Chromium$`Total Recoverable Chromium`, Dairy_Creek_Chromium$CrND,
+    Dairy_Creek_Chromium$dectime, LOG = FALSE)
+## no log transform needed because data looks reasonably linear with time
+## this is nonparametric so normal distribution doesn't matter
+## line estimates median Cr over time, not mean
+
+centrend(Dairy_Creek_Chromium$`Total Recoverable Chromium`, 
+         Dairy_Creek_Chromium$CrND, Dairy_Creek_Chromium$mean_daily_flow_cfs,
+         Dairy_Creek_Chromium$dectime)
+## smoothing for flow
+
+resid.trend <- centrend(Dairy_Creek_Chromium$`Total Recoverable Chromium`, 
+         Dairy_Creek_Chromium$CrND, Dairy_Creek_Chromium$mean_daily_flow_cfs,
+         Dairy_Creek_Chromium$dectime)
+
+## Seasonal Kendall test - test for consistent trend, compares data within
+## same season to each other
+
+censeaken(Dairy_Creek_Chromium$dectime, 
+          Dairy_Creek_Chromium$`Total Recoverable Chromium`, 
+          Dairy_Creek_Chromium$CrND, group = Dairy_Creek_Chromium$Season)
+## significant trend in dry season, not in wet, significant overall
+## permutation test for p-value allows for censored data - randomly reassign
+## times to all data, 10,000 times or so, get p of trend strength more extreme 
+## than what was observed
+
+censeaken(Dairy_Creek_Chromium$dectime, 
+          Dairy_Creek_Chromium$`Total Recoverable Chromium`, 
+          Dairy_Creek_Chromium$CrND, group = Dairy_Creek_Chromium$Season,
+          seaplots = TRUE)
+
+
+# 12 logistic regression -------------------------------------------------
+##Code, Source file, Loadlibs
+load("TCELogReg.rda")
+
+GLM.1 <- glm(TCELogReg$GT5 ~ TCELogReg$DEPTH + TCELogReg$PctIND + 
+               TCELogReg$POPDEN, family = binomial(logit))
+summary(GLM.1)
+
+GLM.0 <- glm(TCELogReg$GT5 ~ 1, family = binomial(logit))
+
+#compare 3-variable model to intercept-only model
+anova(GLM.0, GLM.1, test = "Chisq")
+
+#but is the 3-variable model the best possible?
+#want smallest residual deviance and smallest AIC
+#first check for co-linearity, want below 10
+vif(GLM.1)
+
+#then check if transformation is needed for any x variable
+#check for curves in relationships
+
+residualPlots(GLM.1, type = "deviance")
+#small p-value indicates you should try transformation, but still check
+#that model gets better with transformation
+
+#or Box and Tidwell, add constructed x-variables, transform if slope of
+#constructed x is significant
+#only transform continuous variables, don't transform percentages
+
+#make constructed x variables
+TCELogReg$BT.depth <- TCELogReg$DEPTH*log(TCELogReg$DEPTH)
+TCELogReg$BT.popden <- TCELogReg$POPDEN*log(TCELogReg$POPDEN)
+
+#try model with regular x variables and constructed
+GLM.2 <- glm(TCELogReg$GT5 ~ TCELogReg$POPDEN + TCELogReg$PctIND +
+               TCELogReg$DEPTH + TCELogReg$BT.depth + TCELogReg$BT.popden,
+             family = binomial(logit), data = TCELogReg)
+summary(GLM.2)
+
+#try log or square root of popden (separately), pick lowest AIC
+TCELogReg$sqrt.popden <- sqrt(TCELogReg$POPDEN)
+
+GLM.3 <- glm(TCELogReg$GT5 ~ TCELogReg$DEPTH + TCELogReg$PctIND + 
+               TCELogReg$sqrt.popden, family = binomial(logit))
+summary(GLM.3)
+
+TCELogReg$ln.popden <- log(TCELogReg$POPDEN)
+
+GLM.4 <- glm(TCELogReg$GT5 ~ TCELogReg$DEPTH + TCELogReg$PctIND + 
+               TCELogReg$ln.popden, family = binomial(logit))
+summary(GLM.4)
+
+residualPlots(GLM.4)
+
+#try two-variable model, leaving out least sig variable
+GLM.5 <- glm(TCELogReg$GT5 ~ TCELogReg$DEPTH + 
+               TCELogReg$ln.popden, family = binomial(logit))
+summary(GLM.5)
+
+#compare two-variable with three-variable, does deviance drop with more variables?
+anova(GLM.4, GLM.5, test = "Chisq")
+
+#now try one-variable model
+GLM.6 <- glm(TCELogReg$GT5 ~ TCELogReg$ln.popden, family = binomial(logit)) 
+               
+summary(GLM.6)
+
+anova(GLM.5, GLM.6, test = "Chisq")
+
+anova(GLM.4, GLM.6, test = "Chisq")
+
+#or use bestglm, but only after deciding on transformations, doesn't show
+#anything but best model
+TCEbest <- data.frame(TCELogReg$PctIND, TCELogReg$DEPTH, TCELogReg$ln.popden,
+                      TCELogReg$GT5)#y variable must come last
+bestglm(TCEbest, family = binomial(logit), IC = "AIC")
+
+#what does slope mean? 1.25 is positive, likelihood of getting detection increases
+#with population density
+exp(coef(GLM.6))#calculate exponentiated coefficients (odds ratios)
+
+#check likelihood R2, graphs, measure predictive ability with data pairs
+lrm6 <- lrm(TCELogReg$GT5 ~ TCELogReg$ln.popden)#logistic regression model
+lrm6
+#C is AUC, should be .8-.9 for good predictive ability
+
+##error
+d6 <- datadist(TCELogReg$ln.popden, TCELogReg$GT5)#y variable last
+options(datadist = "d6")
+plot(Predict(lrm6))
+
+p.lrm6 <- Predict(lrm6)
+
+##different error
+d5 = datadist(TCELogReg$ln.popden, TCELogReg$DEPTH, TCELogReg$GT5)
+options(datadist = "d5")
+lrm5 <- lrm(TCELogReg$GT5 ~ TCELogReg$ln.popden + TCELogReg$DEPTH)
+plot(Predict(lrm5))
+
+#plot predicted probabilities of detections
+pof1 <- exp(GLM.6$linear.predictors) / (1 + exp(GLM.6$linear.predictors))
+psort <- order(TCELogReg$ln.popden)
+plot(TCELogReg$ln.popden, TCELogReg$GT5, xlab = "ln(Population Density)",
+     ylab = "Prob (TCE >= 5 ug/L)")
+lines(TCELogReg$ln.popden[psort], pof1[psort], col = "blue")
+#all probabilities are low, there might be more unmeasured things influencing it
+#the model can predict 0's well but not 1's
+
+#measure predictive ability
+cor.test(GLM.6$linear.predictors, TCELogReg$GT5, method = "kendall")
+
+
+# unit 12 exercise ATZ logistic regression --------------------------------
+
+#exercise with Atrazine logistic data, try 6 x variables - APPLIC
+#corn% soilgp precip dyplant fpctl
+load("ReconLogistic.RData")
+
+ATZ.1 <- glm(ReconLogistic$GT_1 ~ ReconLogistic$CORNpct + ReconLogistic$SOILGP +
+             ReconLogistic$PRECIP + ReconLogistic$DYPLANT + 
+               ReconLogistic$FPCTL + ReconLogistic$APPLIC, family = binomial(logit))
+summary(ATZ.1)
+
+ATZ.0 <- glm(ReconLogistic$GT_1 ~ 1, family = binomial(logit))
+anova(ATZ.0, ATZ.1, test = "Chisq")
+
+vif(ATZ.1)
+
+residualPlots(ATZ.1, type = "deviance")
+
+ReconLogistic$sqrt.soilgp <- sqrt(ReconLogistic$SOILGP)
+ATZ.2 <- glm(ReconLogistic$GT_1 ~ ReconLogistic$CORNpct + ReconLogistic$sqrt.soilgp +
+               ReconLogistic$PRECIP + ReconLogistic$DYPLANT + 
+               ReconLogistic$FPCTL + ReconLogistic$APPLIC, family = binomial(logit))
+summary(ATZ.2)
+
+ReconLogistic$ln.soilgp <- log(ReconLogistic$SOILGP)
+ATZ.3 <- glm(ReconLogistic$GT_1 ~ ReconLogistic$CORNpct + ReconLogistic$ln.soilgp +
+               ReconLogistic$PRECIP + ReconLogistic$DYPLANT + 
+               ReconLogistic$FPCTL + ReconLogistic$APPLIC, family = binomial(logit))
+summary(ATZ.3)
+#do not transform soilgp
+
+ReconLogistic$sqrt.precip <- sqrt(ReconLogistic$PRECIP)
+ATZ.4 <- glm(ReconLogistic$GT_1 ~ ReconLogistic$CORNpct + ReconLogistic$SOILGP +
+               ReconLogistic$sqrt.precip + ReconLogistic$DYPLANT + 
+               ReconLogistic$FPCTL + ReconLogistic$APPLIC, family = binomial(logit))
+summary(ATZ.4)
+
+ReconLogistic$ln.precip <- log(ReconLogistic$PRECIP)
+ATZ.5 <- glm(ReconLogistic$GT_1 ~ ReconLogistic$CORNpct + ReconLogistic$SOILGP +
+               ReconLogistic$ln.precip + ReconLogistic$DYPLANT + 
+               ReconLogistic$FPCTL + ReconLogistic$APPLIC, family = binomial(logit))
+summary(ATZ.5)
+#do not transform precip
+
+ReconLogistic$sqrt.dyplant <- sqrt(ReconLogistic$DYPLANT)
+ATZ.6 <- glm(ReconLogistic$GT_1 ~ ReconLogistic$CORNpct + ReconLogistic$SOILGP +
+               ReconLogistic$PRECIP + ReconLogistic$sqrt.dyplant + 
+               ReconLogistic$FPCTL + ReconLogistic$APPLIC, family = binomial(logit))
+summary(ATZ.6)
+
+#error
+ReconLogistic$lndyplant <- log(ReconLogistic$DYPLANT)
+ATZ.7 <- glm(ReconLogistic$GT_1 ~ ReconLogistic$CORNpct + ReconLogistic$SOILGP +
+               ReconLogistic$PRECIP + ReconLogistic$lndyplant + 
+               ReconLogistic$FPCTL + ReconLogistic$APPLIC, family = binomial(logit))
+summary(ATZ.7)
+
+#use sqrt transform of DYPLANT
+
+residualPlots(ATZ.6)
+
+ATZ.8 <- glm(ReconLogistic$GT_1 ~ ReconLogistic$CORNpct + 
+               ReconLogistic$PRECIP + ReconLogistic$sqrt.dyplant + 
+               ReconLogistic$FPCTL + ReconLogistic$APPLIC, family = binomial(logit))
+summary(ATZ.8)
+
+ATZ.9 <- glm(ReconLogistic$GT_1 ~ ReconLogistic$PRECIP + 
+               ReconLogistic$sqrt.dyplant + ReconLogistic$FPCTL + 
+               ReconLogistic$APPLIC, family = binomial(logit))
+summary(ATZ.9)
+
+anova(ATZ.9, ATZ.8, test = "Chisq")
+
+anova(ATZ.9, ATZ.6, test = "Chisq")
+
+ATZbest <- data.frame(ReconLogistic$CORNpct, ReconLogistic$SOILGP,
+                        ReconLogistic$PRECIP, ReconLogistic$sqrt.dyplant, 
+                        ReconLogistic$FPCTL, ReconLogistic$APPLIC, ReconLogistic$GT_1)
+bestglm(ATZbest, family = binomial(logit), IC = "AIC")
+#use 4-variable model ATZ.9
+
+exp(coef(ATZ.9))
+
+cor.test(ATZ.9$linear.predictors, ReconLogistic$GT_1, method = "kendall")
+
+# 13 Multivariate methods for censored data -------------------------------
+#One method of using data with nondetects is to turn all data into a binary 
+#variable, above or below a specific concentration level. If there were one 
+#health limit, for example at 1 ug/L, all data below this limit including 
+#detected values at 0.9 and censored <0.1 and <0.3 would be coded as "below".
+
+##Code, Source file, Loadlibs
+
+#R-mode look at correlations among columns, e.g. environmental variables
+#Q-mode look at correlations among rows, e.g. sites
+
+#Mantel test - relate two distance matrices, use non-parametric Spearman's rho
+# or Kendall's tau, compare cells in same position in each data set
+# Helsel prefers Kendall's tau because of meaningful theory behind it
+
+# binary approach - turn all data into above/below one concentration
+# e.g. highest detection limit
+
+library(readxl)
+FishDDT <- read_excel("FishDDT.XLS")
+View(FishDDT)
+#indicator columns LT1, 1=nondetect
+
+DDTcen <- data.frame(FishDDT$oD_LT1, FishDDT$pD_LT1, FishDDT$oE_LT1, 
+                     FishDDT$pE_LT1, FishDDT$oT_LT1, FishDDT$pT_LT1)
+binaryMDS(DDTcen, FishDDT$Age, title = "NMDS of DDT in fish")
+#distances between points are in ranks, not linear units
+
+#ANOSIM test for group differences in binary data, by age of fish
+
+DDTdissim <- binaryDiss(DDTcen)
+ano.ddt <- anosim(DDTdissim, FishDDT$Age)
+ano.ddt
+#permutation test for significance - what is the likelihood of seeing this value
+# of the R statistic or greater by chance
+anosimPlot(ano.ddt)
+
+#Clustering for binary data
+
+binaryClust(DDTcen, ncluster = 3)
+#shows data by row number, young fish cluster together on left
+
+#Trend Analysis - time as variable with "Manhattan" distances (1 = 1 year)
+#works for any continuous variable
+time.dist <- dist(FishDDT$Date, method = "manhattan")
+ddt.mannkendall <- mantel(time.dist, DDTdissim, method = "kendall", 
+                          permutations = 9999)
+#using 9999 permutations gives more precision in p-value than default 999
+ddt.mannkendall
+densityplot(permustats(ddt.mannkendall), main="Multivariate Mann-Kendall Test")
+
+time.dist
+#shows triangular matrix of differences between rows in years
+
+
+# 13b Ordinal Multivariate Methods ----------------------------------------
+
+#uses ranked data
+#must censor at highest reporting limit for unique ranks
+#compute distance measure after ranking, euclidean distance E
+#Generally for variables that have a physical or chemical scale the Euclidean 
+#coefficient is appropriate. For biological variables such as counts of 
+#organisms where 0 is a truly possible outcome and where data are primarily 
+#integers the Bray-Curtis coefficient is appropriate.
+
+##Code, Source file, Loadlibs
+
+library(readxl)
+FishDDT <- read_excel("FishDDT.XLS")
+View(FishDDT)
+
+newFish <- FishDDT[,-(7:8)] #removes Age, Date columns
+ranks.ddt <- ordranks(newFish, paired = FALSE) #will censor at highest DL
+euclid.ddt <- dist(ranks.ddt) #euclidean distance is default
+euclid.ddt
+
+#NMDS ordination plot
+ddt.eumds <- metaMDS(euclid.ddt)
+p1=ordiplot(ddt.eumds, type = "t", main="NMDS of rank of DDT concs")
+
+#ANOSIM test
+rnk.ano <- anosim(euclid.ddt, FishDDT$Age)
+rnk.ano
+anosimPlot(rnk.ano)
+#probability of result at least as extreme as observation
+
+#Cluster on ranks of concentrations
+rankclust <- hclust(euclid.ddt, method = "average")
+plot(rankclust)
+rect.hclust(rankclust, 4) #add rectangles around 4 clusters
+
+#Correlation or trend test
+#are distances between ranks correlated with distances in time?
+time.dist <- dist(FishDDT$Date, method = "manhattan")
+ddt.ranks <- mantel(time.dist, euclid.ddt, method = "kendall", 
+                    permutations = 9999)
+ddt.ranks
+#compare Mantel statistic to upper quantiles
+
+densityplot(permustats(ddt.ranks))
+
+# 13c Multivariate methods on Uscores -------------------------------------
+
+##For data with multiple reporting limits
+##Uscore is relative ranking with 0 as median, add up signs of differences, 
+##with 0 for tie (1,0,-1) for each comparison
+##then use ranks of uscores to avoid negative values
+##interval encoding of data
+
+##Code, Source file, Loadlibs
+load("~/classes/Censored data/Nondetects 
+     and Data Analysis/NADA Online 3_6/Class Data/FishDDTalt.RData")
+#Data has censored values below 2, censored below 5, and values between
+# LOD of 2 and LOQ of 5, each variable in 2 columns, low and high bounds
+# detections are same number in both columns
+
+#uscores.R computes u-scores for data with TRUE/FALSE censoring indicator column
+#uscorei.R for (lo, hi) interval censoring format data
+#uMDS computes Euclidean distances between scores or rank(scores) and plots
+#results on NMDS colored by grouping variable
+
+names(FishDDTalt)
+Alt <- FishDDTalt[,-(7:8)] #remove Age and Date
+names(Alt)
+Alt <- Alt[,-13] #remove Site
+
+u_scores <- uscoresi(Alt, paired = FALSE) #result is ranks of uscores
+#paired	An option to specify paired = FALSE, where the format would be 
+# ylo1 ylo2 ylo3 yhi1 yhi2 yhi3, low values for each parameter followed 
+# by the high values in the same order.
+head(u_scores)
+
+uclid.ddt <- dist(u_scores)
+uMDS(u_scores, group = FishDDTalt$Age, title = "NMDS of ranks of uscores for 
+     DDT concs")
+
+u_sc2 <- uscoresi(Alt, paired = FALSE, rnk = FALSE) #uscores, not ranks
+uMDS(u_sc2, group = FishDDTalt$Age, title = "NMDS of uscores (not ranks) for 
+     DDT concs")
+#if in your data uscore of +5 and -5 are same thing in different directions, 
+#regular uscores will be better, if not ranks of uscores are better
+#Helsel recommends ranks usually
+
+#ANOSIM test on uscore group differences
+u.ano <- anosim(uclid.ddt, FishDDTalt$Age)
+u.ano
+anosimPlot(u.ano)
+
+#rows with missing data will be skipped by uscores, but then the skipped row
+#will cause a frameshift in the group labels. So, delete any rows with any
+#missing values
+
+#cluster analysis
+uclust <- hclust(uclid.ddt, method = "average")
+plot(uclust)
+
+uclid2.ddt <- dist(u_sc2)
+uclust2 <- hclust(uclid2.ddt, method = "average")
+plot(uclust2) #uscores (not ranks)
+
+#trend analysis
+#Kendall's tau between distances of uscores and distances of times
+time.dist <- dist(FishDDTalt$Date, method = "manhattan")
+ddt.utrend <- mantel(time.dist, uclid.ddt, method = "kendall", 
+                     permutations = 9999)
+ddt.utrend
+#compare Mantel statistic to upper quantiles
+densityplot(permustats(ddt.utrend))
+
+
+# Note for GitHub credential ----------------------------------------------
+##generate new personal access token from link in email, then type in
+##gitcreds::gitcreds_set()
 
